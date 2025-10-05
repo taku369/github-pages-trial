@@ -61,7 +61,7 @@
     const color = `hsla(${hue} ${sat}% ${light}% / 1)`;
 
     // 円の寿命（ミリ秒）。短すぎると点滅のように見えるため最短を長めに
-    const lifeMs = random(9000, 14000); // 9〜14 秒
+    const lifeMs = random(4000, 6000); // 9〜14 秒
 
     // フェードイン・フェードアウトの比率。残りは保持時間
     const fadeInPortion = 0.25;  // 最初の 25% はフェードイン
@@ -86,10 +86,6 @@
     // 画面全体をクリア
     ctx.clearRect(0, 0, w, h);
 
-    // 経過時間（ms）をクランプして、フレームスキップ時の急激な変化を抑制
-    const delta = Math.min(Math.max(now - lastNow, 0), 50); // 最大 50ms（~20fps 相当）
-    lastNow = now;
-
     // 円の生成ペース：およそ 0.4 秒ごとに新しい円を作成
     if (now - lastSpawn > 400) {
       lastSpawn = now;
@@ -103,7 +99,6 @@
       const c = circles[i];
       // 経過時間：delta を用いて負の値や極端なジャンプを避ける
       // createdAt を毎フレーム delta で進めることで、時計のズレに頑健に
-      c.createdAt += delta; // インプレースで進める（比較的安価）
       const age = now - c.createdAt;
       if (age >= c.lifeMs) { circles.splice(i, 1); continue; }
 
@@ -130,15 +125,11 @@
       // 全体として柔らかい印象にするため、最終アルファを弱める
       alpha *= 0.22;
 
-    // 放射状グラデーション（エッジを強調：中心は透明、周辺で色が立ち上がり外側は再び透明）
-    // これにより、円のエッジだけがふわっと見える
+    // 単色の塗りつぶし円（ボーダーなし）
+    // ストロークは使用しないため、lineWidth は 0 のまま
     ctx.globalAlpha = alpha;
-    const gradient = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.radius);
-    gradient.addColorStop(0.0, 'transparent');
-    gradient.addColorStop(0.6, 'transparent');
-    gradient.addColorStop(0.85, c.color);     // エッジ付近を最も色づけ
-    gradient.addColorStop(1.0, 'transparent');
-    ctx.fillStyle = gradient;
+    ctx.shadowBlur = 0; // 縁のにじみ（ボーダー様の見え）を防ぐ
+    ctx.fillStyle = c.color;
     ctx.beginPath();
     ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
     ctx.fill();
