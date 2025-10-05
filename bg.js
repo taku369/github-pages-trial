@@ -54,14 +54,14 @@
     const x = random(-radius, w + radius);
     const y = random(-radius, h + radius);
 
-    // 彩度・輝度は少し高めにして、背景としても見やすい色味に
+    // パステルカラー（低めの彩度・高めの輝度）
     const hue = Math.floor(random(0, 360));
-    const sat = Math.floor(random(60, 85));
-    const light = Math.floor(random(55, 75));
+    const sat = Math.floor(random(30, 45));  // 彩度ひかえめ
+    const light = Math.floor(random(80, 92)); // 輝度高め
     const color = `hsla(${hue} ${sat}% ${light}% / 1)`;
 
-    // 円の寿命（ミリ秒）。長めにしてゆったりした動きに
-    const lifeMs = random(6000, 12000); // 6〜12 秒
+    // 円の寿命（ミリ秒）。短すぎると点滅のように見えるため最短を長めに
+    const lifeMs = random(9000, 14000); // 9〜14 秒
 
     // フェードイン・フェードアウトの比率。残りは保持時間
     const fadeInPortion = 0.25;  // 最初の 25% はフェードイン
@@ -73,6 +73,8 @@
 
   // 前回スポーンした時刻（ミリ秒）
   let lastSpawn = 0;
+  // スムージング用：前フレーム時刻（NaN 回避のため初期化）
+  let lastNow = 0;
 
   // 毎フレーム呼ばれるアニメーションループ
   function animate(now) {
@@ -83,6 +85,10 @@
 
     // 画面全体をクリア
     ctx.clearRect(0, 0, w, h);
+
+    // 経過時間（ms）をクランプして、フレームスキップ時の急激な変化を抑制
+    const delta = Math.min(Math.max(now - lastNow, 0), 50); // 最大 50ms（~20fps 相当）
+    lastNow = now;
 
     // 円の生成ペース：およそ 0.4 秒ごとに新しい円を作成
     if (now - lastSpawn > 400) {
@@ -95,7 +101,10 @@
     // 円を描画し、寿命が尽きたものは配列から取り除く
     for (let i = circles.length - 1; i >= 0; i--) {
       const c = circles[i];
-      const age = now - c.createdAt; // 経過時間
+      // 経過時間：delta を用いて負の値や極端なジャンプを避ける
+      // createdAt を毎フレーム delta で進めることで、時計のズレに頑健に
+      c.createdAt += delta; // インプレースで進める（比較的安価）
+      const age = now - c.createdAt;
       if (age >= c.lifeMs) { circles.splice(i, 1); continue; }
 
       // 進行度（0 → 1）
@@ -114,18 +123,25 @@
         alpha = 1;
       }
 
-      // 全体として柔らかい印象にするため、最終アルファを弱める
-      alpha *= 0.25;
+      // 数値の安全範囲にクランプ（NaN/Inf/負値を避ける）
+      if (!Number.isFinite(alpha)) alpha = 0;
+      alpha = Math.max(0, Math.min(alpha, 1));
 
-      // 放射状グラデーションを使って、中心が濃く外側が透明になる円を描く
-      ctx.globalAlpha = alpha;
-      const gradient = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.radius);
-      gradient.addColorStop(0, c.color);
-      gradient.addColorStop(1, 'transparent');
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
-      ctx.fill();
+      // 全体として柔らかい印象にするため、最終アルファを弱める
+      alpha *= 0.22;
+
+    // 放射状グラデーション（エッジを強調：中心は透明、周辺で色が立ち上がり外側は再び透明）
+    // これにより、円のエッジだけがふわっと見える
+    ctx.globalAlpha = alpha;
+    const gradient = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.radius);
+    gradient.addColorStop(0.0, 'transparent');
+    gradient.addColorStop(0.6, 'transparent');
+    gradient.addColorStop(0.85, c.color);     // エッジ付近を最も色づけ
+    gradient.addColorStop(1.0, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+    ctx.fill();
     }
 
     // 念のためアルファを元に戻す
